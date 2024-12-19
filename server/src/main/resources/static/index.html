@@ -1,0 +1,838 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>分布式机群监管系统</title>
+    <!-- 引入 Bootstrap 样式 -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-KyZXEJrX+Y6r8mP+8Yt6Wz9lO2Z3VqXr3EX4r8t5/0j0g5k5zwEKm5W9zJ3rwiz9" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            background-color: #f4f7fc;
+        }
+
+        header {
+            background-color: #2c3e50;
+            color: white;
+            padding: 20px;
+            text-align: center;
+            font-size: 32px;
+            font-weight: bold;
+        }
+
+        /* 机器设备列表容器，设置最大高度和滚动条 */
+        .machine-list-container {
+            margin-top: 30px;
+            max-height: 400px;
+            overflow-y: auto;
+            border: 1px solid #ccc;
+            border-radius: 8px;
+        }
+
+        .machine-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background-color: white;
+            padding: 10px 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+            margin-bottom: 15px;
+            transition: transform 0.3s ease;
+        }
+
+        .machine-item:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+        }
+
+        /* 状态指示部分，确保宽高和显示正常 */
+        .status-indicator {
+            width: 15px;
+            height: 15px;
+            border-radius: 50%;
+            margin-right: 10px;
+            display: inline-block;
+        }
+
+        .status-online {
+            background-color: #2ecc71;
+        }
+
+        .status-offline {
+            background-color: #95a5a6;
+        }
+
+        .btn-custom {
+            background-color: #3498db;
+            color: white;
+            border-radius: 5px;
+            padding: 8px 16px;
+            font-size: 14px;
+            border: none;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        }
+
+        .btn-custom:hover {
+            background-color: #2980b9;
+        }
+
+        .charts-container {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 40px;
+        }
+
+        .chart-container {
+            width: 23%;
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+        }
+
+        /* 导出和刷新按钮 */
+        .action-buttons {
+            display: flex;
+            justify-content: flex-start;
+            margin-top: 20px;
+            gap: 10px;
+        }
+
+        .export-btn,
+        .refresh-btn {
+            background-color: #16a085;
+            color: white;
+            border: none;
+            padding: 6px 12px;
+            font-size: 14px;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+
+        .export-btn:hover,
+        .refresh-btn:hover {
+            background-color: #1abc9c;
+        }
+
+        /* 搜索框 */
+        .search-container {
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .search-input {
+            padding: 12px 20px;
+            font-size: 16px;
+            border-radius: 5px;
+            border: 1px solid #ccc;
+            width: 250px;
+        }
+
+        .search-btn {
+            background-color: #3498db;
+            color: white;
+            padding: 10px 20px;
+            font-size: 16px;
+            border: none;
+            border-radius: 5px;
+        }
+
+        .search-btn:hover {
+            background-color: #2980b9;
+        }
+
+        /* 弹出小页面 */
+        .floating-window {
+            display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 400px;
+            height: auto;
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+            z-index: 1000;
+        }
+
+        .floating-window-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 18px;
+            font-weight: bold;
+            margin-bottom: 15px;
+        }
+
+        .floating-window-body {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .floating-window-body input {
+            margin-bottom: 10px;
+        }
+
+        .floating-window-close {
+            cursor: pointer;
+            background-color: transparent;
+            border: none;
+            font-size: 20px;
+            font-weight: bold;
+        }
+
+        .floating-window-close:hover {
+            color: red;
+        }
+
+        /* 背景遮罩 */
+        .overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 999;
+        }
+
+    </style>
+</head>
+
+<body>
+
+<header>
+    分布式机群监管系统
+</header>
+
+<div class="container">
+    <!-- 搜索框 -->
+    <div class="search-container">
+        <input type="text" class="search-input" placeholder="搜索设备..." id="search-input">
+        <button class="search-btn" onclick="search()">搜索</button>
+    </div>
+
+    <!-- 机器设备列表 -->
+    <div class="machine-list-container" id="machine-list-container">
+        <h3>机器设备列表</h3>
+        <div class="machine-item">
+            <div>
+                <span class="status-indicator status-online"></span>
+                机器设备 1
+            </div>
+            <div>
+                <button class="btn-custom" onclick="viewStatus(1)">查看状态</button>
+                <button class="btn-custom" onclick="manageConfig(1)">管理配置</button>
+                <button class="btn-custom" onclick="controlCommand(1)">控制命令</button>
+            </div>
+        </div>
+        <div class="machine-item">
+            <div>
+                <span class="status-indicator status-offline"></span>
+                机器设备 2
+            </div>
+            <div>
+                <button class="btn-custom" onclick="viewStatus(2)">查看状态</button>
+                <button class="btn-custom" onclick="manageConfig(2)">管理配置</button>
+                <button class="btn-custom" onclick="controlCommand(2)">控制命令</button>
+            </div>
+        </div>
+        <div class="machine-item">
+            <div>
+                <span class="status-indicator status-online"></span>
+                机器设备 3
+            </div>
+            <div>
+                <button class="btn-custom" onclick="viewStatus(3)">查看状态</button>
+                <button class="btn-custom" onclick="manageConfig(3)">管理配置</button>
+                <button class="btn-custom" onclick="controlCommand(3)">控制命令</button>
+            </div>
+        </div>
+        <div class="machine-item">
+            <div>
+                <span class="status-indicator status-online"></span>
+                机器设备 4
+            </div>
+            <div>
+                <button class="btn-custom" onclick="viewStatus(4)">查看状态</button>
+                <button class="btn-custom" onclick="manageConfig(4)">管理配置</button>
+                <button class="btn-custom" onclick="controlCommand(4)">控制命令</button>
+            </div>
+        </div>
+        <div class="machine-item">
+            <div>
+                <span class="status-indicator status-offline"></span>
+                机器设备 5
+            </div>
+            <div>
+                <button class="btn-custom" onclick="viewStatus(5)">查看状态</button>
+                <button class="btn-custom" onclick="manageConfig(5)">管理配置</button>
+                <button class="btn-custom" onclick="controlCommand(5)">控制命令</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 图表展示 -->
+    <div class="charts-container">
+        <div class="chart-container">
+            <canvas id="chart1"></canvas>
+        </div>
+        <div class="chart-container">
+            <canvas id="chart2"></canvas>
+        </div>
+        <div class="chart-container">
+            <canvas id="chart3"></canvas>
+        </div>
+        <div class="chart-container">
+            <canvas id="chart4"></canvas>
+        </div>
+    </div>
+
+    <!-- 导出和刷新按钮 -->
+    <div class="action-buttons">
+        <button class="export-btn" onclick="downloadExcel()">导出报表</button>
+        <button class="refresh-btn" onclick="chartRefresh()">刷新</button>
+    </div>
+
+</div>
+
+<!-- 弹出窗口 -->
+<div class="overlay" id="overlay"></div>
+<div class="floating-window" id="status-window">
+    <div class="floating-window-header">
+        <span>查看状态</span>
+        <button class="floating-window-close" onclick="closeWindow('status-window')">×</button>
+    </div>
+    <div class="floating-window-body" id="status-body">
+
+    </div>
+</div>
+
+<div class="floating-window" id="config-window">
+    <div class="floating-window-header">
+        <span>管理配置</span>
+        <button class="floating-window-close" onclick="closeWindow('config-window')">×</button>
+    </div>
+    <div class="floating-window-body" id="config-body">
+        <!-- 配置管理内容将动态填充 -->
+        <p><strong>机器标识符:</strong> <span id="device-id"></span></p>
+        <p><strong>IP 地址:</strong> <input type="text" id="ipAddress" placeholder="请输入 IP 地址" /></p>
+        <p><strong>状态同步间隔:</strong> <input type="number" id="syncFrequency" placeholder="请输入同步间隔(min)" /></p>
+        <p><strong>心跳信号发送间隔:</strong> <input type="number" id="heartbeatInterval" placeholder="请输入心跳间隔(s)" /></p>
+        <p><strong>检测心跳连接间隔:</strong> <input type="number" id="checkHeartbeatInterval" placeholder="请输入检测间隔(s)" /></p>
+        <p><strong>工作模式:</strong>
+            <select id="mode">
+
+                <option value="0">空闲模式</option>
+                <option value="1">正常模式</option>
+                <option value="2">高性能模式</option>
+                <option value="3">节能模式</option>
+                <option value="4">维护模式</option>
+            </select>
+        </p>
+    </div>
+    <div class="floating-window-footer">
+        <button class="btn-custom" onclick="submitConfig()">确认</button>
+    </div>
+</div>
+
+<div class="floating-window" id="control-window">
+    <div class="floating-window-header">
+        <span>控制命令</span>
+        <button class="floating-window-close" onclick="closeWindow('control-window')">×</button>
+    </div>
+    <div class="floating-window-body">
+        <!-- 隐藏标签，用于信息传递 -->
+        <span id="control-hidden-device-id" style="display:none;"></span>
+        <input id="control-body" type="text" placeholder="输入控制命令...">
+        <button class="btn-custom" onclick="sendControlCommand()">发送命令</button>
+    </div>
+</div>
+
+<!-- JavaScript -->
+<script>
+    function search() {
+        const searchTerm = document.getElementById("search-input").value; // 获取搜索框中的内容
+
+        // 使用 fetch 发送一个 AJAX 请求
+        fetch(`http://localhost:8080/connect?sid=${encodeURIComponent(searchTerm)}`)
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('网络请求失败');
+                }
+                return response.json();
+            })
+            .then(data => {
+                // 处理服务器返回的数据
+                console.log(data);
+                updateSearchResults(data); // 更新页面上的搜索结果
+            })
+            .catch(error => {
+                console.error('错误:', error);
+            });
+    }
+
+    // 用于更新搜索结果的函数
+    function updateSearchResults(data) {
+        // 清空现有的设备列表
+        const container = document.getElementById('machine-list-container');
+        container.innerHTML = '<h3>机器设备列表</h3>';  // 重新插入标题
+        data.forEach(device => {
+            // 创建新的设备项
+            const machineItem = document.createElement('div');
+            machineItem.classList.add('machine-item');
+            machineItem.innerHTML = `
+                <div>
+                    <span class="status-indicator ${device.online === true ? 'status-online' : 'status-offline'}"></span>
+                    机器设备 ${device.sid}
+                </div>
+                <div>
+                    <button class="btn-custom" onclick="viewStatus(${device.sid})">查看状态</button>
+                    <button class="btn-custom" onclick="manageConfig(${device.sid})">管理配置</button>
+                    <button class="btn-custom" onclick="controlCommand(${device.sid})">控制命令</button>
+                </div>
+            `;
+
+            // 将新的设备项添加到容器中
+            container.appendChild(machineItem);
+        });
+    }
+    function viewStatus(deviceId) {
+        showWindow('status-window');
+
+        // 模拟从后台获取机器状态数据
+        fetch(`http://localhost:8080/status/latest/${deviceId}`)
+            .then(response => response.json())
+            .then(data => {
+                const statusBody = document.getElementById("status-body");
+                statusBody.innerHTML = `
+                <p><strong>机器标识符:</strong> ${data.sid}</p>
+                <p><strong>上传时间:</strong> ${new Date(data.uploadTime).toLocaleString()}</p>
+                <p><strong>CPU 使用率:</strong> ${data.cpuUsage * 100}%</p>
+                <p><strong>总内存:</strong> ${formatBytes(data.totalMemory)}</p>
+                <p><strong>剩余内存:</strong> ${formatBytes(data.freeMemory)}</p>
+                <p><strong>总磁盘空间:</strong> ${formatBytes(data.totalDiskSpace)}</p>
+                <p><strong>剩余磁盘空间:</strong> ${formatBytes(data.freeDiskSpace)}</p>
+                <p><strong>内存利用率:</strong> ${data.memoryUsage}%</p>
+                <p><strong>磁盘利用率:</strong> ${data.diskUsage}%</p>
+            `;
+                // 显示窗口
+                document.getElementById("overlay").style.display = 'block';
+                document.getElementById("status-window").style.display = 'block';
+            })
+            .catch(error => {
+                console.error('获取状态失败:', error);
+            });
+    }
+
+
+
+    // 格式化字节为更易读的格式
+    function formatBytes(bytes) {
+        const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+        if (bytes === 0) return '0 Byte';
+        const i = Math.floor(Math.log(bytes) / Math.log(1024));
+        return (bytes / Math.pow(1024, i)).toFixed(2) + ' ' + sizes[i];
+    }
+
+    function submitConfig(){
+        // 获取表单数据
+        const deviceId = document.getElementById("device-id").textContent; // 获取设备标识符
+        const ipAddress = document.getElementById('ipAddress').value.trim();
+        const syncFrequency = parseInt(document.getElementById('syncFrequency').value) * 60 * 1000;
+        const heartbeatInterval = parseInt(document.getElementById('heartbeatInterval').value) * 1000;
+        const checkHeartbeatInterval = parseInt(document.getElementById('checkHeartbeatInterval').value) * 1000;
+        const mode = parseInt(document.getElementById('mode').value);
+
+        // 简单验证（确保所有字段都有填写）
+        if (!ipAddress || isNaN(syncFrequency) || isNaN(heartbeatInterval) || isNaN(checkHeartbeatInterval) || isNaN(mode)) {
+            alert("请填写所有字段！");
+            return;
+        }
+
+        // 创建配置数据对象
+        const configData = {
+            ipAddress: ipAddress,
+            syncFrequency: syncFrequency,
+            heartbeatInterval: heartbeatInterval,
+            checkHeartbeatInterval: checkHeartbeatInterval,
+            mode: mode
+        };
+
+        // 发送请求到后端
+        fetch(`http://localhost:8080/configuration/${deviceId}`, {
+            method: 'PUT', // 使用 PUT 请求
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(configData) // 传递数据给后端
+        });
+        closeWindow('config-window'); // 关闭窗口
+    }
+
+
+    function manageConfig(deviceId) {
+        const configDevice = document.getElementById("device-id");
+        configDevice.innerText = deviceId;
+        showWindow('config-window');
+
+    }
+
+    function controlCommand(deviceId) {
+        var element = document.getElementById("control-hidden-device-id");
+        element.innerText = deviceId;
+        showWindow('control-window');
+    }
+    function sendControlCommand(){
+        // 获取输入框中的控制命令
+        var controlCommand = document.getElementById('control-body').value.trim();
+
+        // 获取隐藏的设备ID
+        var deviceId = document.getElementById('control-hidden-device-id').innerText.trim();
+
+        // 如果控制命令或设备ID为空，则提示用户
+        if (controlCommand === "" || deviceId === "") {
+            alert("设备ID和控制命令不能为空!");
+            return;
+        }
+
+        // 创建表单数据
+        const formData = new FormData();
+        formData.append('sid', deviceId);
+        formData.append('command', controlCommand);
+
+        // 发送POST请求
+        fetch('http://localhost:8080/command', {
+            method: 'POST',
+            body: formData // 使用 FormData 发送表单数据
+        })
+        closeWindow('control-window');
+    }
+
+    function showWindow(windowId) {
+        document.getElementById(windowId).style.display = 'block';
+        document.getElementById('overlay').style.display = 'block';
+    }
+
+    function closeWindow(windowId) {
+        document.getElementById(windowId).style.display = 'none';
+        document.getElementById('overlay').style.display = 'none';
+    }
+
+
+    // 声明全局变量，存储图表实例
+    let chart1 = null;
+    let chart2 = null;
+    let chart3 = null;
+    let chart4 = null;
+
+    function createChart1(labels, data) {
+        const ctx = document.getElementById('chart1').getContext('2d');
+
+        if (chart1) {
+            // 更新已有图表的数据
+            chart1.data.labels = labels;
+            chart1.data.datasets[0].data = data;
+            chart1.update();
+        } else {
+            // 创建新的图表实例
+            chart1 = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: '每日连接数量',
+                        data: data,
+                        borderColor: 'rgb(75, 192, 192)',
+                        tension: 0.1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: '近五日分布式机器每日连接数量统计',  // 设置标题文本
+                            font: {
+                                size: 18  // 标题字体大小
+                            },
+                            padding: {
+                                top: 10,
+                                bottom: 30  // 标题和图表之间的间距
+                            }
+                        }
+                    }
+                }
+            });
+        }
+    }
+
+    function createChart2(labels, data) {
+        const ctx2 = document.getElementById('chart2').getContext('2d');
+
+        if (chart2) {
+            // 更新已有图表的数据
+            chart2.data.labels = labels;
+            chart2.data.datasets[0].data = data;
+            chart2.update();
+        } else {
+            // 创建新的图表实例
+            chart2 = new Chart(ctx2, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: '该机器近五日连接次数',
+                        data: data,
+                        backgroundColor: ['rgba(255, 99, 132, 0.2)', 'rgba(54, 162, 235, 0.2)', 'rgba(255, 206, 86, 0.2)', 'rgba(75, 192, 192, 0.2)', 'rgba(153, 102, 255, 0.2)'],
+                        borderColor: ['rgba(255, 99, 132, 1)', 'rgba(54, 162, 235, 1)', 'rgba(255, 206, 86, 1)', 'rgba(75, 192, 192, 1)', 'rgba(153, 102, 255, 1)'],
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: '近五日连接次数Top5统计',  // 设置图表标题
+                            font: {
+                                size: 18  // 设置标题字体大小
+                            },
+                            padding: {
+                                top: 10,
+                                bottom: 30  // 设置标题与图表的间距
+                            }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            ticks: {
+                                beginAtZero: true,  // 确保从0开始
+                                stepSize: 1,        // 设置每一刻度的步长为1
+                                callback: function(value) {  // 格式化刻度为整数
+                                    return Number(value).toFixed(0);
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+    }
+
+    function createChart3(labels, data) {
+        const ctx3 = document.getElementById('chart3').getContext('2d');
+
+        if (chart3) {
+            // 更新已有图表的数据
+            chart3.data.labels = labels;
+            chart3.data.datasets[0].data = data;
+            chart3.update();
+        } else {
+            // 创建新的图表实例
+            chart3 = new Chart(ctx3, {
+                type: 'pie',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        data: data,
+                        backgroundColor: ['rgb(255, 99, 132)', 'rgb(54, 162, 235)', 'rgb(255, 206, 86)', 'rgb(75, 192, 192)', 'rgb(153, 102, 255)']  // 你可以根据需要添加更多颜色
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: '控制命令使用次数统计',  // 标题文本
+                            font: {
+                                size: 18  // 标题的字体大小
+                            },
+                            padding: {
+                                top: 10,
+                                bottom: 30
+                            }
+                        }
+                    }
+                }
+            });
+        }
+    }
+
+    function createChart4(labels, data) {
+        const ctx4 = document.getElementById('chart4').getContext('2d');
+
+        if (chart4) {
+            // 更新已有图表的数据
+            chart4.data.labels = labels;
+            chart4.data.datasets[0].data = data;
+            chart4.update();
+        } else {
+            // 创建新的图表实例
+            chart4 = new Chart(ctx4, {
+                type: 'radar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: '利用率情况',
+                        data: data, // 数据已经是百分比，可以直接使用
+                        backgroundColor: 'rgba(75, 192, 192, 0.2)', // 背景颜色
+                        borderColor: 'rgb(75, 192, 192)', // 边框颜色
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: '系统资源平均利用率统计',  // 标题文本
+                            font: {
+                                size: 18  // 标题的字体大小
+                            },
+                            padding: {
+                                top: 10,
+                                bottom: 30
+                            }
+                        }
+                    },
+                    scales: {
+                        r: {
+                            min: 0,  // 设置最小值
+                            max: 100,  // 设置最大值为100，表示100%
+                            ticks: {
+                                stepSize: 20,  // 每次步进值
+                                beginAtZero: true,  // 从0开始
+                                callback: function(value) {
+                                    return value + '%';  // 将数值转换为百分比
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+    }
+
+
+
+
+    // Chart.js 实例化
+    function chartRefresh(){
+        fetch('http://localhost:8080/connect/past/five')  // 假设你的后端接口是这个
+            .then(response => response.json())
+            .then(data => {
+                const { labels, data: chartData } = data;
+                createChart1(labels, chartData);
+            })
+            .catch(error => console.error('Error fetching chart data:', error));
+        fetch('http://localhost:8080/connect/top5/five')  // 假设你的后端接口是这个
+            .then(response => response.json())
+            .then(data => {
+                const { labels, data: chartData } = data;
+                createChart2(labels, chartData);
+            })
+            .catch(error => console.error('Error fetching chart data:', error));
+        fetch('http://localhost:8080/command/usage')  // 假设你的后端接口是这个
+            .then(response => response.json())
+            .then(data => {
+                const { labels, data: chartData } = data;
+                createChart3(labels, chartData);
+            })
+            .catch(error => console.error('Error fetching chart data:', error));
+        fetch('http://localhost:8080/status/avg')  // 假设你的后端接口是这个
+            .then(response => response.json())
+            .then(data => {
+                const { labels, data: chartData } = data;
+                createChart4(labels, chartData);
+            })
+            .catch(error => console.error('Error fetching chart data:', error));
+    }
+    function downloadExcel() {
+        fetch('http://localhost:8080/export')  // 这里的 URL 根据你后端的映射路径来调整
+            .then(response => {
+                if (response.ok) {
+                    return response.blob();  // 解析为二进制数据
+                }
+                throw new Error('网络错误');
+            })
+            .then(blob => {
+                const link = document.createElement('a');
+                link.href = URL.createObjectURL(blob);
+                link.download = 'distributed_machine_report.xlsx';  // 默认文件名
+                link.click();  // 触发下载
+            })
+            .catch(error => {
+                console.error('下载文件失败:', error);
+            });
+    }
+
+    chartRefresh();
+</script>
+
+</body>
+
+<script>
+    // 生成一个随机的 SID
+    function generateRandomSID() {
+        return Math.random().toString(36).substring(2, 15); // 生成一个包含字母和数字的随机字符串
+    }
+
+    // 使用生成的 SID 连接 WebSocket
+    const sid = generateRandomSID();
+    const socket = new WebSocket(`ws://localhost:8080/ws/${sid}`);
+
+    socket.onopen = function(event) {
+        console.log("WebSocket连接已打开");
+    };
+
+    socket.onmessage = function(event) {
+        const searchTerm = document.getElementById("search-input").value.trim(); // 获取搜索框中的内容并去掉前后空格
+
+        // 判断搜索框中有内容则退出函数
+        if (searchTerm !== "") {
+            return; // 如果输入框不为空，退出函数
+        }
+
+        const data = JSON.parse(event.data);
+        // 根据返回的数据更新页面内容
+        console.log(data);
+
+        updateSearchResults(data);
+
+    };
+
+    socket.onclose = function(event) {
+        console.log("WebSocket连接已关闭");
+    };
+
+    socket.onerror = function(error) {
+        console.error("WebSocket发生错误", error);
+    };
+
+    function updateCharts(data) {
+        // 假设后端发送的数据包含chart1, chart2等图表的数据
+        chart1.data.datasets[0].data = data.chart1Data;
+        chart1.update();
+
+        chart2.data.datasets[0].data = data.chart2Data;
+        chart2.update();
+
+        chart3.data.datasets[0].data = data.chart3Data;
+        chart3.update();
+
+        chart4.data.datasets[0].data = data.chart4Data;
+        chart4.update();
+    }
+</script>
+</html>
